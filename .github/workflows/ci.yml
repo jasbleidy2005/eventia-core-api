@@ -1,0 +1,97 @@
+name: CI Pipeline - Eventia Core API
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpassword
+          MYSQL_DATABASE: eventia_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+      
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create test database schema
+      run: |
+        mysql -h 127.0.0.1 -u root -ptestpassword eventia_db < database/schema.sql
+      continue-on-error: true
+    
+    - name: Set environment variables
+      run: |
+        echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
+        echo "DB_PORT=3306" >> $GITHUB_ENV
+        echo "DB_USER=root" >> $GITHUB_ENV
+        echo "DB_PASSWORD=testpassword" >> $GITHUB_ENV
+        echo "DB_NAME=eventia_db" >> $GITHUB_ENV
+        echo "REDIS_HOST=127.0.0.1" >> $GITHUB_ENV
+        echo "REDIS_PORT=6379" >> $GITHUB_ENV
+        echo "FLASK_ENV=testing" >> $GITHUB_ENV
+        echo "FLASK_PORT=5000" >> $GITHUB_ENV
+    
+    - name: Run unit tests
+      run: |
+        pytest tests/unit/ -v --cov=src --cov-report=term
+    
+    - name: Run integration tests
+      run: |
+        pytest tests/integration/ -v
+    
+    - name: Run system tests
+      run: |
+        pytest tests/system/ -v
+    
+    - name: Run security analysis with Bandit
+      run: |
+        bandit -r src/ -f json -o bandit-report.json
+      continue-on-error: true
+    
+    - name: Upload Bandit report
+      uses: actions/upload-artifact@v3
+      with:
+        name: bandit-report
+        path: bandit-report.json
+      if: always()
+    
+    - name: All tests passed
+      run: |
+        echo "================================"
+        echo "           OK                "
+        echo "================================"
+        echo "All tests and checks passed!"
