@@ -36,10 +36,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
     
@@ -48,10 +48,22 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
+    - name: Wait for MySQL to be ready
+      run: |
+        for i in {1..30}; do
+          if mysql -h 127.0.0.1 -u root -ptestpassword -e "SELECT 1" &> /dev/null; then
+            echo "✅ MySQL is ready"
+            break
+          fi
+          echo "Waiting for MySQL... ($i/30)"
+          sleep 2
+        done
+    
     - name: Create test database schema
       run: |
         mysql -h 127.0.0.1 -u root -ptestpassword eventia_db < database/schema.sql
-      continue-on-error: true
+        echo "✅ Database schema created successfully"
+        mysql -h 127.0.0.1 -u root -ptestpassword eventia_db -e "SHOW TABLES;"
     
     - name: Set environment variables
       run: |
@@ -64,6 +76,7 @@ jobs:
         echo "REDIS_PORT=6379" >> $GITHUB_ENV
         echo "FLASK_ENV=testing" >> $GITHUB_ENV
         echo "FLASK_PORT=5000" >> $GITHUB_ENV
+        echo "PYTHONPATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
     
     - name: Run unit tests
       run: |
@@ -92,6 +105,6 @@ jobs:
     - name: All tests passed
       run: |
         echo "================================"
-        echo "           OK                "
+        echo "            OK                "
         echo "================================"
         echo "All tests and checks passed!"
