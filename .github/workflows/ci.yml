@@ -52,7 +52,7 @@ jobs:
       run: |
         for i in {1..30}; do
           if mysql -h 127.0.0.1 -u root -ptestpassword -e "SELECT 1" &> /dev/null; then
-            echo "✅ MySQL is ready"
+            echo " MySQL is ready"
             break
           fi
           echo "Waiting for MySQL... ($i/30)"
@@ -61,9 +61,15 @@ jobs:
     
     - name: Create test database schema
       run: |
-        mysql -h 127.0.0.1 -u root -ptestpassword eventia_db < database/schema.sql
-        echo "✅ Database schema created successfully"
-        mysql -h 127.0.0.1 -u root -ptestpassword eventia_db -e "SHOW TABLES;"
+        ls -la database/
+        if [ -f database/schema.sql ]; then
+          mysql -h 127.0.0.1 -u root -ptestpassword eventia_db < database/schema.sql
+          echo " Database schema created successfully"
+          mysql -h 127.0.0.1 -u root -ptestpassword eventia_db -e "SHOW TABLES;"
+        else
+          echo " Error: database/schema.sql not found"
+          exit 1
+        fi
     
     - name: Set environment variables
       run: |
